@@ -122,7 +122,7 @@ if st.session_state.get("scan_complete") and "scan_results" in st.session_state:
 # --- Advanced Scoring Function Inserted ---
 def advanced_score(data):
     score = 0
-    weight = {
+    weights = {
         "ma": 0.25,
         "rsi": 0.15,
         "macd": 0.20,
@@ -130,11 +130,15 @@ def advanced_score(data):
         "trendline": 0.15,
         "stochastic": 0.10
     }
+    contribs = {}
 
     data["MA_short"] = data["Close"].rolling(window=8).mean()
     data["MA_long"] = data["Close"].rolling(window=24).mean()
     if data["MA_short"].iloc[-1] > data["MA_long"].iloc[-1]:
-        score += weight["ma"]
+        score += weights["ma"]
+        contribs["MA Crossover"] = weights["ma"]
+    else:
+        contribs["MA Crossover"] = 0
 
     delta = data["Close"].diff()
     gain = delta.where(delta > 0, 0)
@@ -144,34 +148,62 @@ def advanced_score(data):
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
     if rsi.iloc[-1] < 30 or rsi.iloc[-1] > 70:
-        score += weight["rsi"]
+        score += weights["rsi"]
+        contribs["RSI"] = weights["rsi"]
+    else:
+        contribs["RSI"] = 0
 
     exp1 = data["Close"].ewm(span=12, adjust=False).mean()
     exp2 = data["Close"].ewm(span=26, adjust=False).mean()
     macd = exp1 - exp2
     signal = macd.ewm(span=9, adjust=False).mean()
     if macd.iloc[-1] > signal.iloc[-1]:
-        score += weight["macd"]
+        score += weights["macd"]
+        contribs["MACD"] = weights["macd"]
+    else:
+        contribs["MACD"] = 0
 
     data["Volume_MA"] = data["Volume"].rolling(window=20).mean()
     if data["Volume"].iloc[-1] > 1.5 * data["Volume_MA"].iloc[-1]:
-        score += weight["volume"]
+        score += weights["volume"]
+        contribs["Volume Spike"] = weights["volume"]
+    else:
+        contribs["Volume Spike"] = 0
 
     data["local_max"] = data["High"][(data["High"] == data["High"].rolling(5, center=True).max())]
     data["local_min"] = data["Low"][(data["Low"] == data["Low"].rolling(5, center=True).min())]
     if data["Close"].iloc[-1] > data["local_max"].shift(1).max():
-        score += weight["trendline"]
+        score += weights["trendline"]
+        contribs["Trend Break ↑"] = weights["trendline"]
     elif data["Close"].iloc[-1] < data["local_min"].shift(1).min():
-        score += weight["trendline"]
+        score += weights["trendline"]
+        contribs["Trend Break ↓"] = weights["trendline"]
+    else:
+        contribs["Trend Break ↑"] = 0
+        contribs["Trend Break ↓"] = 0
 
     low14 = data["Low"].rolling(window=14).min()
     high14 = data["High"].rolling(window=14).max()
     percent_k = 100 * ((data["Close"] - low14) / (high14 - low14))
     percent_d = percent_k.rolling(window=3).mean()
     if percent_k.iloc[-1] > percent_d.iloc[-1]:
-        score += weight["stochastic"]
+        score += weights["stochastic"]
+        contribs["Stochastic"] = weights["stochastic"]
+    else:
+        contribs["Stochastic"] = 0
+
+    st.markdown("#### Confidence Breakdown")
+    bar = go.Figure(go.Bar(
+        x=list(contribs.values()),
+        y=list(contribs.keys()),
+        orientation='h',
+        marker=dict(color="darkcyan")
+    ))
+    bar.update_layout(height=350, xaxis_title="Weight", yaxis_title="Indicator")
+    st.plotly_chart(bar, use_container_width=True)
 
     return round(score * 100, 2)
+
 
 if st.button("🔍 Start Scan", key="scan") or (time.time() - st.session_state.last_refresh > REFRESH_INTERVAL and not st.session_state.scan_complete):
     st.session_state.scan_complete = False
