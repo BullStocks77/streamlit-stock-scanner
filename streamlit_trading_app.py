@@ -62,7 +62,7 @@ def notify(title, message):
     """
     components.html(js)
 
-# --- Advanced Scoring Function ---
+# --- Enhanced Scoring Function ---
 def advanced_score(data, return_contribs=False):
     score = 0
     weights = {
@@ -77,7 +77,11 @@ def advanced_score(data, return_contribs=False):
 
     data["MA_short"] = data["Close"].rolling(window=8).mean()
     data["MA_long"] = data["Close"].rolling(window=24).mean()
-    contribs["MA Crossover"] = weights["ma"] if data["MA_short"].iloc[-1] > data["MA_long"].iloc[-1] else 0
+    if data["MA_long"].iloc[-1] != 0:
+        ratio = data["MA_short"].iloc[-1] / data["MA_long"].iloc[-1]
+        contribs["MA Crossover"] = weights["ma"] * min(1, max(0, ratio - 1))
+    else:
+        contribs["MA Crossover"] = 0
     score += contribs["MA Crossover"]
 
     delta = data["Close"].diff()
@@ -87,18 +91,20 @@ def advanced_score(data, return_contribs=False):
     avg_loss = loss.rolling(window=14).mean()
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    contribs["RSI"] = weights["rsi"] if rsi.iloc[-1] < 30 or rsi.iloc[-1] > 70 else 0
+    contribs["RSI"] = weights["rsi"] * (1 - abs(rsi.iloc[-1] - 50) / 50)
     score += contribs["RSI"]
 
     exp1 = data["Close"].ewm(span=12, adjust=False).mean()
     exp2 = data["Close"].ewm(span=26, adjust=False).mean()
     macd = exp1 - exp2
     signal = macd.ewm(span=9, adjust=False).mean()
-    contribs["MACD"] = weights["macd"] if macd.iloc[-1] > signal.iloc[-1] else 0
+    macd_diff = macd.iloc[-1] - signal.iloc[-1]
+    contribs["MACD"] = weights["macd"] * (macd_diff / abs(macd.iloc[-1])) if macd.iloc[-1] != 0 else 0
     score += contribs["MACD"]
 
     data["Volume_MA"] = data["Volume"].rolling(window=20).mean()
-    contribs["Volume Spike"] = weights["volume"] if data["Volume"].iloc[-1] > 1.5 * data["Volume_MA"].iloc[-1] else 0
+    vol_ratio = data["Volume"].iloc[-1] / data["Volume_MA"].iloc[-1] if data["Volume_MA"].iloc[-1] != 0 else 0
+    contribs["Volume Spike"] = weights["volume"] * min(1, vol_ratio - 1)
     score += contribs["Volume Spike"]
 
     data["local_max"] = data["High"][(data["High"] == data["High"].rolling(5, center=True).max())]
@@ -111,8 +117,11 @@ def advanced_score(data, return_contribs=False):
     high14 = data["High"].rolling(window=14).max()
     percent_k = 100 * ((data["Close"] - low14) / (high14 - low14))
     percent_d = percent_k.rolling(window=3).mean()
-    contribs["Stochastic"] = weights["stochastic"] if percent_k.iloc[-1] > percent_d.iloc[-1] else 0
+    stoch_strength = percent_k.iloc[-1] - percent_d.iloc[-1]
+    contribs["Stochastic"] = weights["stochastic"] * (stoch_strength / 100)
     score += contribs["Stochastic"]
+
+    score = max(0, min(score, 1))
 
     if return_contribs:
         return round(score * 100, 2), contribs
