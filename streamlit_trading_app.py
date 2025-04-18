@@ -81,6 +81,7 @@ if st.button("🔍 Start Scan"):
                 if df.empty or len(df) < 25:
                     continue
                 score = advanced_score(df)
+                print(f"DEBUG: {ticker} Score = {score}")  # DEBUG LOG
                 results.append({
                     "Ticker": ticker,
                     "Latest Price": round(df["Close"].iloc[-1], 2),
