@@ -105,7 +105,6 @@ def analyze_stock(ticker):
         data["Upperwick"] = data["High"] - data[["Close", "Open"]].max(axis=1)
         data["Lowerwick"] = data[["Close", "Open"]].min(axis=1) - data["Low"]
 
-        # MACD
         ema12 = data["Close"].ewm(span=12, adjust=False).mean()
         ema26 = data["Close"].ewm(span=26, adjust=False).mean()
         macd = ema12 - ema26
@@ -144,6 +143,9 @@ def analyze_stock(ticker):
             "Signal": signal,
             "Score": round(score, 2),
             "Confidence (%)": percent_score,
+            "MACD": round(latest["MACD"], 2),
+            "MA Slope": round(data["Ma_short"].diff().iloc[-5:].mean(), 2),
+            "Wick Strength": wick_score,
             "Time": latest.name
         }
     except Exception as e:
@@ -155,7 +157,6 @@ if st.button("🔍 Start Scan", key="scan") or (time.time() - st.session_state.l
     results = []
     with st.spinner("Scanning stocks..."):
         for stock in watchlist:
-            print(f"Scanning {stock}...")
             result = analyze_stock(stock)
             if result:
                 results.append(result)
@@ -179,6 +180,15 @@ if st.session_state.get("scan_complete") and "scan_results" in st.session_state:
     ))
     fig.update_layout(height=600, xaxis_title="Confidence (%)", yaxis_title="Ticker")
     st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("### 🔍 Signal Component Breakdown")
+    if "MACD" in top20.columns:
+        score_fig = go.Figure()
+        score_fig.add_trace(go.Bar(name="MACD", x=top20["Ticker"], y=top20["MACD"]))
+        score_fig.add_trace(go.Bar(name="MA Slope", x=top20["Ticker"], y=top20["MA Slope"]))
+        score_fig.add_trace(go.Bar(name="Wick Strength", x=top20["Ticker"], y=top20["Wick Strength"]))
+        score_fig.update_layout(barmode="group", xaxis_title="Ticker", yaxis_title="Score Value")
+        st.plotly_chart(score_fig, use_container_width=True)
 
     st.markdown("### ✅ Tracked Stocks")
     for ticker in st.session_state.selected_stocks:
