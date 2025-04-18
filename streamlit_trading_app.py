@@ -155,6 +155,12 @@ for ticker in watchlist:
 
 results_df = pd.DataFrame(results).sort_values("Confidence (%)", ascending=False).head(20)
 
+# --- DISPLAY RESULTS ---
+if not results_df.empty:
+    st.subheader("📊 Top 20 Scan Results")
+    st.dataframe(results_df.style.format({"Price": "${:.2f}", "Score": "{:.2f}", "Confidence (%)": "{:.2f}"}), use_container_width=True)
+    st.success("✅ Confidence Scores updated using advanced logic.")
+
 # --- Sidebar: Tracked Stocks ---
 st.sidebar.markdown("### 📌 Tracked Stocks")
 if "scan_results" in st.session_state and not st.session_state.scan_results.empty:
