@@ -180,18 +180,22 @@ if st.session_state.get("scan_complete") and "scan_results" in st.session_state:
         st.write(f"{emoji} {row['Ticker']} — {row['Signal']} — Confidence: {row['Confidence (%)']}%")
 
     st.subheader("📊 Confidence Breakdown by Stock")
-    selected = st.selectbox("Choose a stock to see scoring breakdown:", options=list(st.session_state.scan_results["Ticker"]))
-    if selected:
-        df = yf.download(selected, period="30d", interval="1h", progress=False)
-        _, contribs = advanced_score(df, return_contribs=True)
-        bar = go.Figure(go.Bar(
-            x=list(contribs.values()),
-            y=list(contribs.keys()),
-            orientation='h',
-            marker=dict(color="darkcyan")
-        ))
-        bar.update_layout(height=350, xaxis_title="Weight", yaxis_title="Indicator")
-        st.plotly_chart(bar, use_container_width=True)
+    if not st.session_state.scan_results.empty:
+        tickers = list(st.session_state.scan_results["Ticker"].dropna().unique())
+        selected = st.selectbox("Choose a stock to see scoring breakdown:", options=tickers)
+        if selected:
+            df = yf.download(selected, period="30d", interval="1h", progress=False)
+            _, contribs = advanced_score(df, return_contribs=True)
+            bar = go.Figure(go.Bar(
+                x=list(contribs.values()),
+                y=list(contribs.keys()),
+                orientation='h',
+                marker=dict(color="darkcyan")
+            ))
+            bar.update_layout(height=350, xaxis_title="Weight", yaxis_title="Indicator")
+            st.plotly_chart(bar, use_container_width=True)
+    else:
+        st.warning("⚠️ No scan results to show breakdown. Please run a scan first.")
 
 # --- Advanced Scoring Function Inserted ---
 def advanced_score(data, return_contribs=False):
