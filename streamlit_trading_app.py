@@ -123,12 +123,12 @@ def advanced_score(data, return_contribs=False):
     contribs["Stochastic"] = weights["stochastic"] * (stoch_strength / 100)
     score += contribs["Stochastic"]
 
-    score = max(0, min(score, 1))
+    score = round(score * 100, 2)
 
     if return_contribs:
-        return round(score * 100, 2), contribs
+        return score, contribs
 
-    return round(score * 100, 2)
+    return score
 
 # --- SCANNING LOGIC USING ADVANCED SCORE ---
 results = []
@@ -145,8 +145,8 @@ for ticker in watchlist:
             "RSI": round(100 - (100 / (1 + data["Close"].diff().gt(0).rolling(14).sum().iloc[-1])), 2),
             "Volume Spike": "Yes" if data["Volume"].iloc[-1] > 1.5 * data["Volume"].rolling(20).mean().iloc[-1] else "No",
             "Signal": signal,
-            "Score": round(score_val / 100, 2),
-            "Confidence (%)": int(score_val),
+            "Score": round(score_val, 2),
+            "Confidence (%)": round(score_val, 2),
             "Time": datetime.datetime.now()
         })
         print(f"{ticker} Score: {score_val}% | Contribs: {contribs}")
