@@ -179,10 +179,12 @@ if st.session_state.get("scan_complete") and "scan_results" in st.session_state:
         emoji = "🟢" if row["Confidence (%)"] > 70 else ("🟡" if row["Confidence (%)"] > 50 else "⚪")
         st.write(f"{emoji} {row['Ticker']} — {row['Signal']} — Confidence: {row['Confidence (%)']}%")
 
+    st.markdown("---")
     st.subheader("📊 Confidence Breakdown by Stock")
     if not st.session_state.scan_results.empty:
         tickers = list(st.session_state.scan_results["Ticker"].dropna().unique())
-        selected = st.selectbox("Choose a stock to see scoring breakdown:", options=tickers)
+        st.markdown("#### 🔎 Choose a stock to inspect scoring weights:")
+        selected = st.selectbox("Select a Ticker:", options=tickers, key="confidence_breakdown")
         if selected:
             df = yf.download(selected, period="30d", interval="1h", progress=False)
             _, contribs = advanced_score(df, return_contribs=True)
