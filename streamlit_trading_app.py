@@ -70,6 +70,23 @@ if selected_to_track:
 if st.session_state.selected_stocks and (time.time() - st.session_state.last_refresh > REFRESH_INTERVAL):
     st.experimental_rerun()
 
+# Display placeholder for scan results
+st.markdown("## 📊 Top 20 Scan Results")
+st.markdown("_(Scan results and enhanced visual analysis will display here after scan.)_")
+
+# Signal visualization bar
+st.markdown("## 🧠 Confidence Signal View")
+st.markdown("_(Each ticker visualized with confidence and signal emoji)_")
+placeholder_conf = st.empty()
+
+# Confidence ranking bar
+st.markdown("## 📈 Confidence Ranking Bar Chart")
+placeholder_chart = st.empty()
+
+# Deep dive for top tickers
+st.markdown("## 🔍 Deep Dive on Top 3 Stocks")
+placeholder_deep = st.empty()
+
 def analyze_stock(ticker):
     try:
         data = yf.download(ticker, period="30d", interval="1h", auto_adjust=False, progress=False)
