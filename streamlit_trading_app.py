@@ -168,6 +168,8 @@ if not results_df.empty:
             conf = match.iloc[0]["Confidence (%)"]
             emoji = "🟢" if conf > 70 else ("🟡" if conf > 50 else "⚪")
             st.write(f"{emoji} {ticker} - Confidence: {conf}%")
+if not results_df.empty:
+    # [Your results display logic...]
 else:
     st.info("👆 Click 'Start Scan' to begin scanning the selected market.")
 
