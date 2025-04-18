@@ -78,8 +78,8 @@ def advanced_score(data, return_contribs=False):
     data["MA_short"] = data["Close"].rolling(window=8).mean()
     data["MA_long"] = data["Close"].rolling(window=24).mean()
     if data["MA_long"].iloc[-1] != 0:
-        ratio = data["MA_short"].iloc[-1] / data["MA_long"].iloc[-1]
-        contribs["MA Crossover"] = weights["ma"] * min(1, max(0, ratio - 1))
+        ma_diff = data["MA_short"].iloc[-1] - data["MA_long"].iloc[-1]
+        contribs["MA Crossover"] = weights["ma"] * (ma_diff / data["MA_long"].iloc[-1])
     else:
         contribs["MA Crossover"] = 0
     score += contribs["MA Crossover"]
@@ -91,7 +91,8 @@ def advanced_score(data, return_contribs=False):
     avg_loss = loss.rolling(window=14).mean()
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    contribs["RSI"] = weights["rsi"] * (1 - abs(rsi.iloc[-1] - 50) / 50)
+    rsi_val = rsi.iloc[-1]
+    contribs["RSI"] = weights["rsi"] * (1 - abs(rsi_val - 50) / 50)
     score += contribs["RSI"]
 
     exp1 = data["Close"].ewm(span=12, adjust=False).mean()
@@ -99,23 +100,24 @@ def advanced_score(data, return_contribs=False):
     macd = exp1 - exp2
     signal = macd.ewm(span=9, adjust=False).mean()
     macd_diff = macd.iloc[-1] - signal.iloc[-1]
-    contribs["MACD"] = weights["macd"] * (macd_diff / abs(macd.iloc[-1])) if macd.iloc[-1] != 0 else 0
+    contribs["MACD"] = weights["macd"] * (macd_diff / (abs(macd.iloc[-1]) + 1e-5))
     score += contribs["MACD"]
 
     data["Volume_MA"] = data["Volume"].rolling(window=20).mean()
-    vol_ratio = data["Volume"].iloc[-1] / data["Volume_MA"].iloc[-1] if data["Volume_MA"].iloc[-1] != 0 else 0
-    contribs["Volume Spike"] = weights["volume"] * min(1, vol_ratio - 1)
+    vol_ratio = data["Volume"].iloc[-1] / (data["Volume_MA"].iloc[-1] + 1e-5)
+    contribs["Volume Spike"] = weights["volume"] * min(1, vol_ratio / 1.5)
     score += contribs["Volume Spike"]
 
-    data["local_max"] = data["High"][(data["High"] == data["High"].rolling(5, center=True).max())]
-    data["local_min"] = data["Low"][(data["Low"] == data["Low"].rolling(5, center=True).min())]
-    contribs["Trend Break ↑"] = weights["trendline"] if data["Close"].iloc[-1] > data["local_max"].shift(1).max() else 0
-    contribs["Trend Break ↓"] = weights["trendline"] if data["Close"].iloc[-1] < data["local_min"].shift(1).min() else 0
+    data["local_max"] = data["High"].rolling(5, center=True).max()
+    data["local_min"] = data["Low"].rolling(5, center=True).min()
+    close = data["Close"].iloc[-1]
+    contribs["Trend Break ↑"] = weights["trendline"] if close > data["local_max"].iloc[-2] else 0
+    contribs["Trend Break ↓"] = weights["trendline"] if close < data["local_min"].iloc[-2] else 0
     score += max(contribs["Trend Break ↑"], contribs["Trend Break ↓"])
 
     low14 = data["Low"].rolling(window=14).min()
     high14 = data["High"].rolling(window=14).max()
-    percent_k = 100 * ((data["Close"] - low14) / (high14 - low14))
+    percent_k = 100 * ((data["Close"] - low14) / (high14 - low14 + 1e-5))
     percent_d = percent_k.rolling(window=3).mean()
     stoch_strength = percent_k.iloc[-1] - percent_d.iloc[-1]
     contribs["Stochastic"] = weights["stochastic"] * (stoch_strength / 100)
@@ -147,6 +149,7 @@ for ticker in watchlist:
             "Confidence (%)": int(score_val),
             "Time": datetime.datetime.now()
         })
+        print(f"{ticker} Score: {score_val}% | Contribs: {contribs}")
     except Exception as e:
         print(f"Error processing {ticker}: {e}")
 
