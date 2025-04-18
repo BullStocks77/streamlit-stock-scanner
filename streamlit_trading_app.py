@@ -161,6 +161,16 @@ if not results_df.empty:
     st.dataframe(results_df.style.format({"Price": "${:.2f}", "Score": "{:.2f}", "Confidence (%)": "{:.2f}"}), use_container_width=True)
     st.success("✅ Confidence Scores updated using advanced logic.")
 
+    st.markdown("### ✅ Tracked Stocks")
+    for ticker in st.session_state.selected_stocks:
+        match = results_df[results_df["Ticker"] == ticker]
+        if not match.empty:
+            conf = match.iloc[0]["Confidence (%)"]
+            emoji = "🟢" if conf > 70 else ("🟡" if conf > 50 else "⚪")
+            st.write(f"{emoji} {ticker} - Confidence: {conf}%")
+else:
+    st.info("👆 Click 'Start Scan' to begin scanning the selected market.")
+
 # --- Sidebar: Tracked Stocks ---
 st.sidebar.markdown("### 📌 Tracked Stocks")
 if "scan_results" in st.session_state and not st.session_state.scan_results.empty:
