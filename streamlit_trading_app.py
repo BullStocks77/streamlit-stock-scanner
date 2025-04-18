@@ -62,14 +62,74 @@ def notify(title, message):
     """
     components.html(js)
 
+# --- Advanced Scoring Function ---
+def advanced_score(data, return_contribs=False):
+    score = 0
+    weights = {
+        "ma": 0.25,
+        "rsi": 0.15,
+        "macd": 0.20,
+        "volume": 0.15,
+        "trendline": 0.15,
+        "stochastic": 0.10
+    }
+    contribs = {}
+
+    data["MA_short"] = data["Close"].rolling(window=8).mean()
+    data["MA_long"] = data["Close"].rolling(window=24).mean()
+    contribs["MA Crossover"] = weights["ma"] if data["MA_short"].iloc[-1] > data["MA_long"].iloc[-1] else 0
+    score += contribs["MA Crossover"]
+
+    delta = data["Close"].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    contribs["RSI"] = weights["rsi"] if rsi.iloc[-1] < 30 or rsi.iloc[-1] > 70 else 0
+    score += contribs["RSI"]
+
+    exp1 = data["Close"].ewm(span=12, adjust=False).mean()
+    exp2 = data["Close"].ewm(span=26, adjust=False).mean()
+    macd = exp1 - exp2
+    signal = macd.ewm(span=9, adjust=False).mean()
+    contribs["MACD"] = weights["macd"] if macd.iloc[-1] > signal.iloc[-1] else 0
+    score += contribs["MACD"]
+
+    data["Volume_MA"] = data["Volume"].rolling(window=20).mean()
+    contribs["Volume Spike"] = weights["volume"] if data["Volume"].iloc[-1] > 1.5 * data["Volume_MA"].iloc[-1] else 0
+    score += contribs["Volume Spike"]
+
+    data["local_max"] = data["High"][(data["High"] == data["High"].rolling(5, center=True).max())]
+    data["local_min"] = data["Low"][(data["Low"] == data["Low"].rolling(5, center=True).min())]
+    contribs["Trend Break ↑"] = weights["trendline"] if data["Close"].iloc[-1] > data["local_max"].shift(1).max() else 0
+    contribs["Trend Break ↓"] = weights["trendline"] if data["Close"].iloc[-1] < data["local_min"].shift(1).min() else 0
+    score += max(contribs["Trend Break ↑"], contribs["Trend Break ↓"])
+
+    low14 = data["Low"].rolling(window=14).min()
+    high14 = data["High"].rolling(window=14).max()
+    percent_k = 100 * ((data["Close"] - low14) / (high14 - low14))
+    percent_d = percent_k.rolling(window=3).mean()
+    contribs["Stochastic"] = weights["stochastic"] if percent_k.iloc[-1] > percent_d.iloc[-1] else 0
+    score += contribs["Stochastic"]
+
+    if return_contribs:
+        return round(score * 100, 2), contribs
+
+    return round(score * 100, 2)
+
+# --- Sidebar: Tracked Stocks ---
 st.sidebar.markdown("### 📌 Tracked Stocks")
-selected_to_track = st.sidebar.multiselect("Monitor:", watchlist, default=st.session_state.selected_stocks)
+selected_to_track = st.sidebar.multiselect("Monitor:", options=watchlist, default=st.session_state.selected_stocks)
 if selected_to_track:
     st.session_state.selected_stocks = selected_to_track
 
+# --- Auto-refresh Logic ---
 if st.session_state.selected_stocks and (time.time() - st.session_state.last_refresh > REFRESH_INTERVAL):
     st.experimental_rerun()
 
+# --- Main UI ---
 st.title("📈 Advanced Stock Scanner")
 
 if st.button("🔍 Start Scan"):
@@ -119,9 +179,8 @@ if st.session_state.get("scan_complete") and "scan_results" in st.session_state:
         emoji = "🟢" if row["Confidence (%)"] > 70 else ("🟡" if row["Confidence (%)"] > 50 else "⚪")
         st.write(f"{emoji} {row['Ticker']} — {row['Signal']} — Confidence: {row['Confidence (%)']}%")
 
-    # Confidence Breakdown Selection
     st.subheader("📊 Confidence Breakdown by Stock")
-    selected = st.selectbox("Choose a stock to see scoring breakdown:", st.session_state.scan_results["Ticker"])
+    selected = st.selectbox("Choose a stock to see scoring breakdown:", options=list(st.session_state.scan_results["Ticker"]))
     if selected:
         df = yf.download(selected, period="30d", interval="1h", progress=False)
         _, contribs = advanced_score(df, return_contribs=True)
