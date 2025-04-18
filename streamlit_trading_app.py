@@ -128,6 +128,30 @@ def advanced_score(data, return_contribs=False):
 
     return round(score * 100, 2)
 
+# --- SCANNING LOGIC USING ADVANCED SCORE ---
+results = []
+for ticker in watchlist:
+    try:
+        data = yf.download(ticker, period="3mo", interval="1d", progress=False)
+        if len(data) < 30 or data.isnull().values.any():
+            continue
+        score_val, contribs = advanced_score(data, return_contribs=True)
+        signal = "BUY" if score_val > 65 else "HOLD" if score_val > 45 else "SELL"
+        results.append({
+            "Ticker": ticker,
+            "Price": round(data["Close"].iloc[-1], 2),
+            "RSI": round(100 - (100 / (1 + data["Close"].diff().gt(0).rolling(14).sum().iloc[-1])), 2),
+            "Volume Spike": "Yes" if data["Volume"].iloc[-1] > 1.5 * data["Volume"].rolling(20).mean().iloc[-1] else "No",
+            "Signal": signal,
+            "Score": round(score_val / 100, 2),
+            "Confidence (%)": int(score_val),
+            "Time": datetime.datetime.now()
+        })
+    except Exception as e:
+        print(f"Error processing {ticker}: {e}")
+
+results_df = pd.DataFrame(results).sort_values("Confidence (%)", ascending=False).head(20)
+
 # --- Sidebar: Tracked Stocks ---
 st.sidebar.markdown("### 📌 Tracked Stocks")
 if "scan_results" in st.session_state and not st.session_state.scan_results.empty:
