@@ -121,7 +121,12 @@ def advanced_score(data, return_contribs=False):
 
 # --- Sidebar: Tracked Stocks ---
 st.sidebar.markdown("### 📌 Tracked Stocks")
-selected_to_track = st.sidebar.multiselect("Monitor:", options=watchlist, default=st.session_state.selected_stocks, key="tracked_stocks")
+if "scan_results" in st.session_state and not st.session_state.scan_results.empty:
+    top20_tickers = list(st.session_state.scan_results["Ticker"].unique())
+else:
+    top20_tickers = watchlist
+
+selected_to_track = st.sidebar.multiselect("Monitor:", options=top20_tickers, default=st.session_state.selected_stocks, key="tracked_stocks")
 if selected_to_track:
     st.session_state.selected_stocks = selected_to_track
 
