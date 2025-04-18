@@ -119,8 +119,23 @@ if st.session_state.get("scan_complete") and "scan_results" in st.session_state:
         emoji = "🟢" if row["Confidence (%)"] > 70 else ("🟡" if row["Confidence (%)"] > 50 else "⚪")
         st.write(f"{emoji} {row['Ticker']} — {row['Signal']} — Confidence: {row['Confidence (%)']}%")
 
+    # Confidence Breakdown Selection
+    st.subheader("📊 Confidence Breakdown by Stock")
+    selected = st.selectbox("Choose a stock to see scoring breakdown:", st.session_state.scan_results["Ticker"])
+    if selected:
+        df = yf.download(selected, period="30d", interval="1h", progress=False)
+        _, contribs = advanced_score(df, return_contribs=True)
+        bar = go.Figure(go.Bar(
+            x=list(contribs.values()),
+            y=list(contribs.keys()),
+            orientation='h',
+            marker=dict(color="darkcyan")
+        ))
+        bar.update_layout(height=350, xaxis_title="Weight", yaxis_title="Indicator")
+        st.plotly_chart(bar, use_container_width=True)
+
 # --- Advanced Scoring Function Inserted ---
-def advanced_score(data):
+def advanced_score(data, return_contribs=False):
     score = 0
     weights = {
         "ma": 0.25,
@@ -192,18 +207,10 @@ def advanced_score(data):
     else:
         contribs["Stochastic"] = 0
 
-    st.markdown("#### Confidence Breakdown")
-    bar = go.Figure(go.Bar(
-        x=list(contribs.values()),
-        y=list(contribs.keys()),
-        orientation='h',
-        marker=dict(color="darkcyan")
-    ))
-    bar.update_layout(height=350, xaxis_title="Weight", yaxis_title="Indicator")
-    st.plotly_chart(bar, use_container_width=True)
+    if return_contribs:
+        return round(score * 100, 2), contribs
 
     return round(score * 100, 2)
-
 
 if st.button("🔍 Start Scan", key="scan") or (time.time() - st.session_state.last_refresh > REFRESH_INTERVAL and not st.session_state.scan_complete):
     st.session_state.scan_complete = False
