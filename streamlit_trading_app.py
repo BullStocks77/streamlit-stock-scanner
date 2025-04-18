@@ -46,7 +46,6 @@ if "last_refresh" not in st.session_state:
 
 REFRESH_INTERVAL = 600
 
-# Push Notification Helper
 def notify(title, message):
     js = f"""
         <script>
@@ -63,7 +62,6 @@ def notify(title, message):
     """
     components.html(js)
 
-# Sidebar
 st.sidebar.markdown("### 📌 Tracked Stocks")
 selected_to_track = st.sidebar.multiselect("Monitor:", watchlist, default=st.session_state.selected_stocks)
 if selected_to_track:
@@ -72,7 +70,6 @@ if selected_to_track:
 if st.session_state.selected_stocks and (time.time() - st.session_state.last_refresh > REFRESH_INTERVAL):
     st.experimental_rerun()
 
-# --- ANALYZE FUNCTION ---
 def analyze_stock(ticker):
     try:
         data = yf.download(ticker, period="30d", interval="1h", auto_adjust=False, progress=False)
@@ -88,14 +85,13 @@ def analyze_stock(ticker):
         data = data[~data.index.duplicated(keep='last')]
 
         required_cols = {"Open", "High", "Low", "Close", "Volume"}
-        missing = required_cols - set(data.columns)
-        if missing:
-            print(f"Error processing {ticker}: Missing required columns: {missing}. Received: {list(data.columns)}")
+        if not required_cols.issubset(set(data.columns)):
             return None
 
-        data.dropna(subset=["Open", "High", "Low", "Close", "Volume"], inplace=True)
+        data.dropna(subset=list(required_cols), inplace=True)
         data["Ma_short"] = data["Close"].rolling(window=8).mean()
         data["Ma_long"] = data["Close"].rolling(window=24).mean()
+
         delta = data["Close"].diff()
         gain = delta.where(delta > 0, 0)
         loss = -delta.where(delta < 0, 0)
@@ -103,18 +99,29 @@ def analyze_stock(ticker):
         avg_loss = loss.rolling(window=14).mean()
         rs = avg_gain / avg_loss
         data["Rsi"] = 100 - (100 / (1 + rs))
+
         data["Volume_ma_20"] = data["Volume"].rolling(window=20).mean()
         data["Highvolumespike"] = data["Volume"] > (1.5 * data["Volume_ma_20"])
         data["Upperwick"] = data["High"] - data[["Close", "Open"]].max(axis=1)
         data["Lowerwick"] = data[["Close", "Open"]].min(axis=1) - data["Low"]
 
+        # MACD
+        ema12 = data["Close"].ewm(span=12, adjust=False).mean()
+        ema26 = data["Close"].ewm(span=26, adjust=False).mean()
+        macd = ema12 - ema26
+        signal_line = macd.ewm(span=9, adjust=False).mean()
+        data["MACD"] = macd
+        data["SignalLine"] = signal_line
+
         latest = data.iloc[-1]
         ma_score = 1 if latest["Ma_short"] > latest["Ma_long"] else -1
-        volume_score = 1 if latest["Highvolumespike"] else 0
-        rsi_score = 1 if latest["Rsi"] < 30 else (-1 if latest["Rsi"] > 70 else 0)
-        candle_score = 1 if latest["Upperwick"] < latest["Lowerwick"] else (-1 if latest["Upperwick"] > latest["Lowerwick"] else 0)
+        rsi_score = 1 if latest["Rsi"] < 30 else -1 if latest["Rsi"] > 70 else 0
+        volume_score = 1 if latest["Highvolumespike"] and latest["Close"] > latest["Ma_short"] else 0
+        macd_score = 1 if latest["MACD"] > latest["SignalLine"] else -1
+        wick_score = 1 if latest["Lowerwick"] > latest["Upperwick"] else -1 if latest["Upperwick"] > latest["Lowerwick"] else 0
+        slope_score = 1 if data["Ma_short"].diff().iloc[-5:].mean() > 0 else -1
 
-        score = (0.3 * ma_score) + (0.2 * volume_score) + (0.3 * rsi_score) + (0.2 * candle_score)
+        score = (0.2 * ma_score + 0.2 * rsi_score + 0.2 * volume_score + 0.2 * macd_score + 0.1 * wick_score + 0.1 * slope_score)
         normalized_score = (score + 1) / 2
         percent_score = round(normalized_score * 100, 2)
 
@@ -143,13 +150,12 @@ def analyze_stock(ticker):
         print(f"Error processing {ticker}: {e}")
         return None
 
-# --- SCANNER BUTTON ---
 if st.button("🔍 Start Scan", key="scan") or (time.time() - st.session_state.last_refresh > REFRESH_INTERVAL and not st.session_state.scan_complete):
     st.session_state.scan_complete = False
     results = []
     with st.spinner("Scanning stocks..."):
         for stock in watchlist:
-            print(f"Scanning {stock}...")  # Debug message
+            print(f"Scanning {stock}...")
             result = analyze_stock(stock)
             if result:
                 results.append(result)
@@ -158,7 +164,6 @@ if st.button("🔍 Start Scan", key="scan") or (time.time() - st.session_state.l
     st.session_state.last_refresh = time.time()
     notify("Scan Complete", f"Found {len(results)} candidates")
 
-# --- DISPLAY RESULTS ---
 if st.session_state.get("scan_complete") and "scan_results" in st.session_state:
     df = st.session_state.scan_results
     st.subheader("📊 Top 20 Scan Results")
@@ -174,6 +179,16 @@ if st.session_state.get("scan_complete") and "scan_results" in st.session_state:
     ))
     fig.update_layout(height=600, xaxis_title="Confidence (%)", yaxis_title="Ticker")
     st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("### ✅ Tracked Stocks")
+    for ticker in st.session_state.selected_stocks:
+        match = top20[top20["Ticker"] == ticker]
+        if not match.empty:
+            conf = match.iloc[0]["Confidence (%)"]
+            emoji = "🟢" if conf > 70 else ("🟡" if conf > 50 else "⚪")
+            st.write(f"{emoji} {ticker} - Confidence: {conf}%")
+else:
+    st.info("👆 Click 'Start Scan' to begin scanning the selected market.")
 
     st.markdown("### ✅ Tracked Stocks")
     for ticker in st.session_state.selected_stocks:
