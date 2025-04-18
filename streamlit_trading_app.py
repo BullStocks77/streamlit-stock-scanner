@@ -87,6 +87,16 @@ placeholder_chart = st.empty()
 st.markdown("## 🔍 Deep Dive on Top 3 Stocks")
 placeholder_deep = st.empty()
 
+# Prep area for upgraded scoring logic
+st.markdown("## ⚙️ Advanced Signal Scoring")
+st.markdown("_(Upgraded logic engine with MA, RSI, MACD, Volume, Trendline, Stochastics and more will run here)_")
+placeholder_scoring = st.empty()
+
+# Prep chart zone
+st.markdown("## 📊 Advanced Visual Insights")
+st.markdown("_(Backtest overlays, MACD, Stochastics, Bollinger Bands and trendlines loading soon...)_")
+placeholder_visuals = st.empty()
+
 def analyze_stock(ticker):
     try:
         data = yf.download(ticker, period="30d", interval="1h", auto_adjust=False, progress=False)
